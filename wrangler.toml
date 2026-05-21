@@ -1,0 +1,7 @@
+name = "payment-helper"
+main = "src/index.ts"
+compatibility_date = "2026-05-20"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "90b5d3f1eeca402c8e570164d2168eec"
