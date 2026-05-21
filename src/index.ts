@@ -28,7 +28,7 @@ app.use( "*", cors({
     allowHeaders: ["Content-Type"],
 }));
 
-app.post("/verify", async (c) => {
+app.post("/", async (c) => {
   const info = getConnInfo(c);
   const ip = info.remote.address || "anonymous";
 
@@ -36,39 +36,43 @@ app.post("/verify", async (c) => {
     return c.json({ error: "Too many failed attempts. Please try again later." }, 429);
   }
 
+  if (!(await isAuthenticated(c, ip))) {
+    return c.text("Unauthorized", 401, { "WWW-Authenticate": 'Basic realm="secure"' });
+  }
+
   const body = await c.req.parseBody();
+
   const amount = String(body["amount"] || "");
   const invoiceDate = String(body["invoiceDate"] || "");
   const orderNumber = String(body["orderNumber"] || "");
+  const serviceDescription = String(body["serviceDescription"] || "");
   const invoiceUrl = String(body["invoiceUrl"] || "");
-  const providedToken = String(body["encryptedToken"] || "");
 
-  if (!amount || !invoiceDate || !orderNumber || !providedToken || !c.env.AES_ENCRYPTION_KEY) {
-    await incrementFailureCount(c, ip);
-    return c.json({ error: "Missing required verification fields" }, 400);
+  if (!amount || !invoiceDate || !orderNumber || !c.env.AES_ENCRYPTION_KEY) {
+    return c.json({ error: "Missing required fields or encryption key" }, 400);
   }
 
-  try {
-    const expectedPayload = `${invoiceUrl}|${orderNumber}|${amount}|${invoiceDate}`;
-    const decryptedPayload = await decryptToken(providedToken, c.env.AES_ENCRYPTION_KEY);
+  const payload = `${invoiceUrl}|${orderNumber}|${amount}|${invoiceDate}`;
 
-    if (decryptedPayload !== expectedPayload) {
-      await incrementFailureCount(c, ip);
-      return c.json({ error: "Invalid token verification payload" }, 401);
-    }
+  const encryptedToken = await encryptToken(payload, c.env.AES_ENCRYPTION_KEY);
 
-    // Success: Token verified. Clean up any recorded failures for this IP.
-    const kv = c.env.RATE_LIMIT_KV;
-    if (kv) {
-      await kv.delete(`fail:${ip}`);
-    }
+  const params = new URLSearchParams({
+    amount,
+    invoiceDate,
+    orderNumber,
+    serviceDescription,
+    encryptedToken,
+  });
 
-    return c.json({ verified: true });
-  } catch (err) {
-    await incrementFailureCount(c, ip);
-    return c.json({ error: "Token verification failed" }, 401);
-  }
+  const baseUrl = c.env.ENVIRONMENT === "SANDBOX"
+      ? "http://localhost:3000"
+      : c.env.FRONTEND_BASE_URL;
+
+  const paymentUrl = `${baseUrl}/payment?${params.toString()}`;
+
+  return c.json({ paymentUrl: paymentUrl });
 });
+
 
 app.post("/verify", async (c) => {
   const localEncryptionKey = c.env.AES_ENCRYPTION_KEY;
