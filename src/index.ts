@@ -2,7 +2,9 @@ import { Hono } from 'hono';
 import CryptoJS from 'crypto-js';
 import { cors } from 'hono/cors'
 import { getConnInfo } from "hono/cloudflare-workers";
-import { hasExceededFailedAuthLimit, isAuthenticated } from './auth_modules';
+import { hasExceededFailedAuthLimit, isAuthenticated, isTokenVerified } from './auth_modules';
+import { encryptToken, decryptToken } from './crypto_modules';
+
 
 type Bindings = {
   BASIC_AUTH_USER: string;
@@ -73,8 +75,13 @@ app.post("/", async (c) => {
   return c.json({ paymentUrl: paymentUrl });
 });
 
-
 app.post("/verify", async (c) => {
+  const ip = c.req.header("CF-Connecting-IP") || "unknown";
+
+  if (await hasExceededFailedAuthLimit(c, ip)) {
+    return c.json({ error: "Too many failed attempts. Please try again later." }, 429);
+  }
+
   const localEncryptionKey = c.env.AES_ENCRYPTION_KEY;
   const locationId = c.env.FORTE_LOCATION_ID;
   const apiId = c.env.FORTE_API_ACCESS_ID;
@@ -87,16 +94,12 @@ app.post("/verify", async (c) => {
   const decryptedToken = await decryptToken(encryptedToken, localEncryptionKey);
   const [decryptedInvoiceUrl, dOrder, dAmount, dDate] = decryptedToken.split("|");
 
-  if (dOrder !== orderNumber || dAmount !== amount || dDate !== invoiceDate) {
+  const isVerified = await isTokenVerified({ orderNumber: dOrder, amount: dAmount, invoiceDate: dDate }, { orderNumber, amount, invoiceDate }, c, ip);
+  if (!isVerified) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  const startTime = performance.now();
-
   const isAlreadyPaid = await checkPaymentStatus(orderNumber, apiId, secureKey, locationId, merchantId, forteEnv);
-
-  const endTime = performance.now();
-  console.log(`check payment status took ${(endTime - startTime).toFixed(2)} ms`);
 
   if (isAlreadyPaid) {
     return c.json({ error: "Already Paid" }, 401);
@@ -116,63 +119,6 @@ app.post("/verify", async (c) => {
     locationId
   });
 });
-
-async function encryptToken(payload: string, aesKey: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(aesKey),
-    { name: "AES-GCM" },
-    false,
-    ["encrypt"]
-  );
-
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    key,
-    encoder.encode(payload)
-  );
-
-  const combined = new Uint8Array(iv.length + ciphertext.byteLength);
-  combined.set(iv, 0);
-  combined.set(new Uint8Array(ciphertext), iv.length);
-
-  let binary = '';
-  for (let i = 0; i < combined.byteLength; i++) {
-    binary += String.fromCharCode(combined[i]);
-  }
-  return btoa(binary);
-}
-
-async function decryptToken(encryptedToken: string, aesKey: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const binary = atob(encryptedToken);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-
-  const iv = bytes.slice(0, 12);
-  const ciphertext = bytes.slice(12);
-
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(aesKey),
-    { name: "AES-GCM" },
-    false,
-    ["decrypt"]
-  );
-
-  const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv },
-    key,
-    ciphertext
-  );
-
-  return new TextDecoder().decode(decrypted);
-}
 
 export async function getForteUtcTime(): Promise<string> {
   const res = await fetch("https://checkout.forte.net/getUTC?callback=?", {
