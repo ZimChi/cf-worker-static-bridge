@@ -1,12 +1,15 @@
 {
-  "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260520.1",
-    "@types/node": "^25.9.1",
-    "typescript": "^6.0.3",
-    "wrangler": "^4.86.0"
-  },
+  "type": "module",
   "dependencies": {
     "crypto-js": "^4.2.0",
     "hono": "^4.12.21"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.16.9",
+    "@cloudflare/workers-types": "^4.20260520.1",
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7",
+    "wrangler": "^4.86.0"
   }
 }

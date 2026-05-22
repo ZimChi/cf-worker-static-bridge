@@ -1,3 +1,8 @@
+
+function generateHmac(secret: string, message: string): string {
+  return CryptoJS.HmacMD5(message, secret).toString();
+}
+
 async function encryptToken(payload: string, aesKey: string): Promise<string> {
   const encoder = new TextEncoder();
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -55,4 +60,4 @@ async function decryptToken(encryptedToken: string, aesKey: string): Promise<str
   return new TextDecoder().decode(decrypted);
 }
 
-export { encryptToken, decryptToken };
+export { encryptToken, decryptToken, generateHmac };
