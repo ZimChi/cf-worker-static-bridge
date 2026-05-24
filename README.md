@@ -2,9 +2,8 @@
 # cf-worker-static-bridge
 
 ### Project Description
-A Cloudflare Worker serving as a secure, serverless backend for an
-implementation of Forte Checkout on a static open source GitHub Page. It bridges the
-architectural gap between static hosting and dynamic payment processing.
+A Cloudflare Worker serving as a serverless backend for an instance of Forte
+Checkout on a static open source GitHub Page.
 
 ### Core Functionality
 * Encrypted Secret Management: Maintains Forte API credentials
