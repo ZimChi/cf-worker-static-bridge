@@ -88,7 +88,15 @@ app.post("/verify", async (c) => {
   const merchantId = c.env.FORTE_MERCHANT_ID;
   const production = isProduction(c.env);
 
-  const { amount, invoiceDate, orderNumber, encryptedToken } = await c.req.json();
+  const { amount, invoiceDate, orderNumber, encryptedToken, expectedEnvironment } = await c.req.json();
+
+  if (expectedEnvironment !== c.env.FORTE_ENV) {
+    return c.json({ error: "ENVIRONMENT MISMATCH" }, 500);
+  }
+  
+  if (c.env.FORTE_ENV === 'production' && (c.req.header("Origin") || c.req.header("Referer") || "") !== "https://www.thesquarerepair.com") {
+    return c.json({ error: "ENVIRONMENT MISMATCH" }, 500);
+  }
 
   const decryptedToken = await decryptToken(encryptedToken, localEncryptionKey);
   const [decryptedInvoiceUrl, dOrder, dAmount, dDate] = decryptedToken.split("|");
@@ -102,7 +110,7 @@ app.post("/verify", async (c) => {
   const isAlreadyPaid = await checkPaymentStatus(orderNumber, apiId, secureKey, locationId, merchantId, production);
 
   if (isAlreadyPaid) {
-    return c.json({ error: "Already Paid" }, 401);
+    return c.json({ error: "Unauthorized" }, 401);
   }
 
   const utcTime = await getForteUtcTime();

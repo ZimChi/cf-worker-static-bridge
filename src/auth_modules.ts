@@ -10,7 +10,7 @@ async function hasExceededFailedAuthLimit(c: any, ip: string): Promise<boolean> 
 
   const count = parseInt(currentCountStr, 10);
 
-  if (count > 3) {
+  if (count >= 2) {
     console.log(`FAILED_AUTH_LIMIT ip=${ip} count=${count}`);
     return true;
   }
@@ -77,9 +77,7 @@ async function incrementFailureCount(c: any, ip: string): Promise<void> {
   const currentCount = currentCountStr ? parseInt(currentCountStr, 10) : 0;
   const newCount = currentCount + 1;
 
-  // Cloudflare KV requires a minimum expirationTtl of 60 seconds.
-  // Entries will automatically drop off after this window.
-  await kv.put(cacheKey, String(newCount), { expirationTtl: 60 });
+  await kv.put(cacheKey, String(newCount), { expirationTtl: 300 });
 
   console.error(`FAILED_AUTH ip=${ip} count=${newCount}`);
 }
