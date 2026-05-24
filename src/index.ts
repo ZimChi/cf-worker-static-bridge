@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import CryptoJS from 'crypto-js';
 import { cors } from 'hono/cors'
 import { getConnInfo } from "hono/cloudflare-workers";
 import { hasExceededFailedAuthLimit, isAuthenticated, isTokenVerified } from './auth_modules';
@@ -99,7 +98,6 @@ app.post("/verify", async (c) => {
   if (!isVerified) {
     return c.json({ error: "Unauthorized" }, 401);
   }
-
 
   const isAlreadyPaid = await checkPaymentStatus(orderNumber, apiId, secureKey, locationId, merchantId, production);
 

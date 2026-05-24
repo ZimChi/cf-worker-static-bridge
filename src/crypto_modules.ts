@@ -1,3 +1,4 @@
+import CryptoJS from 'crypto-js';
 
 function generateHmac(secret: string, message: string): string {
   return CryptoJS.HmacMD5(message, secret).toString();
